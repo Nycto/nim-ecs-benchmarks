@@ -19,6 +19,8 @@ type
     x, y: float32
   Velocity = object
     x, y: float32
+  Acceleration = object
+    x, y: float32
 
 # =========================
 # Systems
@@ -37,6 +39,33 @@ proc deleteEntities(query: FullQuery[(Position, )], delete: Delete) {.loopSys.} 
   for eid, comp in query:
     delete(eid)
 
+proc createAccelEntities(spawn: Spawn[(Position, Velocity, Acceleration)]) {.startupSys.} =
+  for _ in 0..<ENTITY_COUNT:
+    spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0), Acceleration(x: 1.0, y: 1.0))
+
+proc addComponent(
+  query: FullQuery[(Position, Not[Acceleration])],
+  attach: Attach[(Acceleration, )]
+) {.loopSys.} =
+  for eid, _ in query:
+    eid.attach((Acceleration(x: 1.0, y: 1.0), ))
+
+proc removeComponent(
+  query: FullQuery[(Position, Acceleration)],
+  detach: Detach[(Acceleration, )]
+) {.loopSys.} =
+  for eid, _ in query:
+    detach(eid)
+
+proc addRemoveComponent(
+  query: FullQuery[(Position, Not[Acceleration])],
+  attach: Attach[(Acceleration, )],
+  detach: Detach[(Acceleration, )]
+) {.loopSys.} =
+  for eid, _ in query:
+    eid.attach((Acceleration(x: 1.0, y: 1.0), ))
+    detach(eid)
+
 proc exitAfterOne(exit: Shared[NecsusRun]) {.loopSys.} =
   exit := ExitLoop
 
@@ -47,6 +76,9 @@ proc exitAfterOne(exit: Shared[NecsusRun]) {.loopSys.} =
 proc appCreate() {.necsus([~createEntities, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
 proc appIter() {.necsus([~createEntities, ~move, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
 proc appDelete() {.necsus([~createEntities, ~deleteEntities, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
+proc appAddComp() {.necsus([~createEntities, ~addComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
+proc appRemoveComp() {.necsus([~createAccelEntities, ~removeComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
+proc appAddRemoveComp() {.necsus([~createEntities, ~addRemoveComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
 
 proc readSystem(query: FullQuery[(Position, )], lookup: Lookup[(Position, )]) {.loopSys.} =
   var total = 0'f32
@@ -111,6 +143,42 @@ proc runNecsusBenchmarks() =
   showDetailed(suite.benchmarks[3])
   # Actually, the above necsus benchmarking might be very noisy due to setup costs.
   # But necsus IS the app.
+
+  # 5. Add component
+  suite.add benchmarkWithSetup(
+    "add component",
+    SAMPLE,
+    WARMUP,
+    (discard),
+    (
+      appAddComp()
+    )
+  )
+  showDetailed(suite.benchmarks[^1])
+
+  # 6. Remove component
+  suite.add benchmarkWithSetup(
+    "remove component",
+    SAMPLE,
+    WARMUP,
+    (discard),
+    (
+      appRemoveComp()
+    )
+  )
+  showDetailed(suite.benchmarks[^1])
+
+  # 7. Add + Remove component
+  suite.add benchmarkWithSetup(
+    "add remove component",
+    SAMPLE,
+    WARMUP,
+    (discard),
+    (
+      appAddRemoveComp()
+    )
+  )
+  showDetailed(suite.benchmarks[^1])
 
   suite.showSummary()
   suite.saveSummary("necsus")
