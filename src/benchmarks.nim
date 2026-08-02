@@ -2,7 +2,7 @@
 ######################################################## CRUISE PROFILER ###############################################################
 ########################################################################################################################################
 
-import times, math, algorithm, strutils, tables, unicode
+import times, math, algorithm, strutils, tables, unicode, std/monotimes
 
 type
   Parameters* = object
@@ -213,107 +213,65 @@ proc showComparison*(cmp: Comparison) =
   
   echo "╚═", "═".repeat(66), "═╝"
 
-template benchmark*(benchmarkName: string, sample, code: untyped): untyped =
-  var bench = Benchmark()
-  bench.name = benchmarkName
-  bench.params = Parameters(samples: sample, warmup: 0)
-  bench.times = newSeq[float](sample)
-  bench.mems = newSeq[float](sample)
-  
-  block:
-    code
+proc initBenchmark*(benchmarkName: string, sample, warm: int): Benchmark =
+  result.name = benchmarkName
+  result.params = Parameters(samples: sample, warmup: warm)
+  result.times = newSeqOfCap[float](sample)
+  result.mems = newSeqOfCap[float](sample)
 
-  block:
-    for i in 0..<sample:
-      let m0 = getOccupiedMem()
-      let t0 = cpuTime()
-      code
-      let elapsed = cpuTime() - t0
-      let allocated = max(0, getOccupiedMem() - m0).float
-      
-      bench.times[i] = elapsed
-      bench.mems[i] = allocated
-  
-  finalize(bench)
-  bench
+template measure*(bench: var Benchmark, code: untyped) =
+  ## Records one timed sample. Anything that should not be measured -- world
+  ## construction, entity spawning, restoring state consumed by the previous
+  ## sample -- belongs outside this call.
+  ##
+  ## Timing uses `getMonoTime`, which is a monotonic wall clock with nanosecond
+  ## resolution. `cpuTime` wraps C's `clock()`, whose tick is a whole
+  ## microsecond on Linux; several benchmarks in this suite land in the tens of
+  ## microseconds, where that quantisation is a visible fraction of the result.
+  let m0 = getOccupiedMem()
+  let t0 = getMonoTime()
+  code
+  let elapsed = (getMonoTime() - t0).inNanoseconds.float / 1e9
+  let allocated = max(0, getOccupiedMem() - m0).float
+
+  bench.times.add(elapsed)
+  bench.mems.add(allocated)
+
+template benchmark*(benchmarkName: string, sample, code: untyped): untyped =
+  benchmark(benchmarkName, sample, 1, code)
 
 template benchmark*(benchmarkName: string, sample, warm, code: untyped): untyped =
-  var bench = Benchmark()
-  bench.name = benchmarkName
-  bench.params = Parameters(samples: sample, warmup: warm)
-  bench.times = newSeqOfCap[float](sample)
-  bench.mems = newSeqOfCap[float](sample)
-  
+  var bench = initBenchmark(benchmarkName, sample, warm)
+
   block:
     for i in 0..<warm:
       code
-    
-  block:
+
     for i in 0..<sample:
-      let m0 = getOccupiedMem()
-      let t0 = cpuTime()
-      code
-      let elapsed = cpuTime() - t0
-      let allocated = max(0, getOccupiedMem() - m0).float
-      
-      bench.times.add(elapsed)
-      bench.mems.add(allocated)
-  
+      measure(bench):
+        code
+
   finalize(bench)
   bench
 
-template benchmarkWithSetup*(benchmarkName: string, sample, 
+template benchmarkWithSetup*(benchmarkName: string, sample,
                               setup, code: untyped): untyped =
-  var bench = Benchmark()
-  bench.name = benchmarkName
-  bench.params = Parameters(samples: sample, warmup: 0)
-  bench.times = newSeqOfCap[float](sample)
-  bench.mems = newSeqOfCap[float](sample)
-  
-  block:
-    setup
-    code
-  
-  block:
-    for i in 0..<sample:
-      setup  # Setup avant chaque mesure
-      
-      let m0 = getOccupiedMem()
-      let t0 = cpuTime()
-      code
-      let elapsed = cpuTime() - t0
-      let allocated = max(0, getOccupiedMem() - m0).float
-      
-      bench.times.add(elapsed)
-      bench.mems.add(allocated)
-  
-  finalize(bench)
-  bench
+  benchmarkWithSetup(benchmarkName, sample, 1, setup, code)
 
 template benchmarkWithSetup*(benchmarkName: string, sample, warm,
                               setup, code: untyped): untyped =
-  var bench = Benchmark()
-  bench.name = benchmarkName
-  bench.params = Parameters(samples: sample, warmup: warm)
-  bench.times = newSeqOfCap[float](sample)
-  bench.mems = newSeqOfCap[float](sample)
-  
+  var bench = initBenchmark(benchmarkName, sample, warm)
+
   block:
     for i in 0..<warm:
       setup
       code
-    
+
     for i in 0..<sample:
       setup
-      let m0 = getOccupiedMem()
-      let t0 = cpuTime()
-      code
-      let elapsed = cpuTime() - t0
-      let allocated = max(0, getOccupiedMem() - m0).float
-      
-      bench.times.add(elapsed)
-      bench.mems.add(allocated)
-  
+      measure(bench):
+        code
+
   finalize(bench)
   bench
 
