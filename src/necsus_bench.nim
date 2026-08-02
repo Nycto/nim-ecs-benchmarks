@@ -68,8 +68,8 @@ proc deleteEntities(query: FullQuery[(Position, )], delete: Delete) {.loopSys.} 
   for eid, comp in query:
     delete(eid)
 
-proc readSystem(query: FullQuery[(Position, )], lookup: Lookup[(Position, )]) {.loopSys.} =
-  for eid, _ in query:
+proc readSystem(lookup: Lookup[(Position, )]) {.loopSys.} =
+  for eid in benchEntities:
     let found = lookup(eid)
     if found.isSome:
       readSink += found.get()[0].x
@@ -114,7 +114,7 @@ proc addRemoveComponent(
 proc appCreate() {.necsus([~createEntities], newNecsusConf(entitySize = 100_000)).}
 proc appIter() {.necsus([~spawnPosVel, ~move], newNecsusConf(entitySize = 100_000)).}
 proc appDelete() {.necsus([~spawnPosVel, ~deleteEntities], newNecsusConf(entitySize = 100_000)).}
-proc appRead() {.necsus([~spawnPosVel, ~readSystem], newNecsusConf(entitySize = 100_000)).}
+proc appRead() {.necsus([~spawnTrackedPos, ~readSystem], newNecsusConf(entitySize = 100_000)).}
 proc appWrite() {.necsus([~spawnTrackedPos, ~writeSystem], newNecsusConf(entitySize = 100_000)).}
 proc appAddComp() {.necsus([~spawnPosVel, ~addComponent], newNecsusConf(entitySize = 100_000)).}
 proc appRemoveComp() {.necsus([~spawnPosVelAccel, ~removeComponent], newNecsusConf(entitySize = 100_000)).}
