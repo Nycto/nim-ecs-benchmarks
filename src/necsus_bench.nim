@@ -22,26 +22,46 @@ type
   Acceleration = object
     x, y: float32
 
+# Accumulator that outlives the benchmark so reads can't be optimised away
+var readSink = 0'f32
+
 # =========================
 # Systems
 # =========================
+#
+# Spawning happens in `startupSys` systems, which Necsus runs while the app
+# state is being initialised. That keeps world construction and entity creation
+# inside the untimed setup block, leaving `tick()` to run only the loop systems
+# that are actually under test.
 
-proc move(dt: TimeDelta, entities: Query[(ptr Position, Velocity)]) {.loopSys.} =
+proc spawnPosVel(spawn: Spawn[(Position, Velocity)]) {.startupSys.} =
+  for _ in 0..<ENTITY_COUNT:
+    spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0))
+
+proc spawnPosVelAccel(spawn: Spawn[(Position, Velocity, Acceleration)]) {.startupSys.} =
+  for _ in 0..<ENTITY_COUNT:
+    spawn.with(
+      Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0), Acceleration(x: 1.0, y: 1.0)
+    )
+
+proc createEntities(spawn: Spawn[(Position, Velocity)]) {.loopSys.} =
+  for _ in 0..<ENTITY_COUNT:
+    spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0))
+
+proc move(entities: Query[(ptr Position, Velocity)]) {.loopSys.} =
   for (pos, vel) in entities:
     pos.x += vel.x
     pos.y += vel.y
-
-proc createEntities(spawn: Spawn[(Position, Velocity)]) {.startupSys.} =
-  for _ in 0..<ENTITY_COUNT:
-    spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0))
 
 proc deleteEntities(query: FullQuery[(Position, )], delete: Delete) {.loopSys.} =
   for eid, comp in query:
     delete(eid)
 
-proc createAccelEntities(spawn: Spawn[(Position, Velocity, Acceleration)]) {.startupSys.} =
-  for _ in 0..<ENTITY_COUNT:
-    spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0), Acceleration(x: 1.0, y: 1.0))
+proc readSystem(query: FullQuery[(Position, )], lookup: Lookup[(Position, )]) {.loopSys.} =
+  for eid, _ in query:
+    let found = lookup(eid)
+    if found.isSome:
+      readSink += found.get()[0].x
 
 proc addComponent(
   query: FullQuery[(Position, Not[Acceleration])],
@@ -66,27 +86,21 @@ proc addRemoveComponent(
     eid.attach((Acceleration(x: 1.0, y: 1.0), ))
     detach(eid)
 
-proc exitAfterOne(exit: Shared[NecsusRun]) {.loopSys.} =
-  exit := ExitLoop
-
 # =========================
 # Apps
 # =========================
+#
+# These procs are never called directly. The `necsus` macro also generates an
+# `initXxx()` proc returning the app state, plus a `tick()` on that state. The
+# benchmarks below drive those manually so that only one tick is measured.
 
-proc appCreate() {.necsus([~createEntities, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-proc appIter() {.necsus([~createEntities, ~move, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-proc appDelete() {.necsus([~createEntities, ~deleteEntities, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-proc appAddComp() {.necsus([~createEntities, ~addComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-proc appRemoveComp() {.necsus([~createAccelEntities, ~removeComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-proc appAddRemoveComp() {.necsus([~createEntities, ~addRemoveComponent, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
-
-proc readSystem(query: FullQuery[(Position, )], lookup: Lookup[(Position, )]) {.loopSys.} =
-  var total = 0'f32
-  for eid, _ in query:
-     if lookup(eid).isSome:
-       total += lookup(eid).get()[0].x
-
-proc appRead() {.necsus([~createEntities, ~readSystem, ~exitAfterOne], newNecsusConf(entitySize = 100_000)).}
+proc appCreate() {.necsus([~createEntities], newNecsusConf(entitySize = 100_000)).}
+proc appIter() {.necsus([~spawnPosVel, ~move], newNecsusConf(entitySize = 100_000)).}
+proc appDelete() {.necsus([~spawnPosVel, ~deleteEntities], newNecsusConf(entitySize = 100_000)).}
+proc appRead() {.necsus([~spawnPosVel, ~readSystem], newNecsusConf(entitySize = 100_000)).}
+proc appAddComp() {.necsus([~spawnPosVel, ~addComponent], newNecsusConf(entitySize = 100_000)).}
+proc appRemoveComp() {.necsus([~spawnPosVelAccel, ~removeComponent], newNecsusConf(entitySize = 100_000)).}
+proc appAddRemoveComp() {.necsus([~spawnPosVel, ~addRemoveComponent], newNecsusConf(entitySize = 100_000)).}
 
 # =========================
 # Benchmarks
@@ -95,63 +109,73 @@ proc appRead() {.necsus([~createEntities, ~readSystem, ~exitAfterOne], newNecsus
 proc runNecsusBenchmarks() =
   var suite = initSuite("Necsus")
 
+  # 1. Create
+  # A fresh, empty app per sample; the tick spawns ENTITY_COUNT entities.
   suite.add benchmarkWithSetup(
     "create entity",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appCreate()
+      var app = initAppCreate()
+    ),
+    (
+      app.tick()
     )
   )
-  showDetailed(suite.benchmarks[0])
+  showDetailed(suite.benchmarks[^1])
 
   # 2. Iterate
   suite.add benchmarkWithSetup(
     "iteration",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appIter()
+      var app = initAppIter()
+    ),
+    (
+      app.tick()
     )
   )
-  showDetailed(suite.benchmarks[1])
+  showDetailed(suite.benchmarks[^1])
 
   # 3. Delete
   suite.add benchmarkWithSetup(
     "delete entity",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appDelete()
+      var app = initAppDelete()
+    ),
+    (
+      app.tick()
     )
   )
-  showDetailed(suite.benchmarks[2])
+  showDetailed(suite.benchmarks[^1])
 
   # 4. Read
   suite.add benchmarkWithSetup(
     "read",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appRead()
+      var app = initAppRead()
+    ),
+    (
+      app.tick()
     )
   )
-  showDetailed(suite.benchmarks[3])
-  # Actually, the above necsus benchmarking might be very noisy due to setup costs.
-  # But necsus IS the app.
+  showDetailed(suite.benchmarks[^1])
 
   # 5. Add component
   suite.add benchmarkWithSetup(
     "add component",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appAddComp()
+      var app = initAppAddComp()
+    ),
+    (
+      app.tick()
     )
   )
   showDetailed(suite.benchmarks[^1])
@@ -161,9 +185,11 @@ proc runNecsusBenchmarks() =
     "remove component",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appRemoveComp()
+      var app = initAppRemoveComp()
+    ),
+    (
+      app.tick()
     )
   )
   showDetailed(suite.benchmarks[^1])
@@ -173,12 +199,16 @@ proc runNecsusBenchmarks() =
     "add remove component",
     SAMPLE,
     WARMUP,
-    (discard),
     (
-      appAddRemoveComp()
+      var app = initAppAddRemoveComp()
+    ),
+    (
+      app.tick()
     )
   )
   showDetailed(suite.benchmarks[^1])
+
+  echo readSink
 
   suite.showSummary()
   suite.saveSummary("necsus")
