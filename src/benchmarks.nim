@@ -216,6 +216,27 @@ proc showComparison*(cmp: Comparison) =
   
   echo "╚═", "═".repeat(66), "═╝"
 
+var blackHole* {.volatile.}: uint64
+
+proc blackBox*[T](value: T) {.noinline.} =
+  ## Keeps `value` observable so the optimiser cannot delete the work that
+  ## produced it.
+  ##
+  ## Under `-d:danger` a loop whose result is never read is dead code. Several
+  ## benchmarks here accumulated into a local that nothing looked at afterwards,
+  ## and were duly deleted: Cruise Sparse "read" was reporting 311 ns for 10,000
+  ## component fetches, which is roughly 0.03 ns per entity.
+  ##
+  ## Call this once per benchmark, after the sampling loop -- the accumulator is
+  ## then live across the whole benchmark, so the loop cannot be removed and no
+  ## cost lands inside the timed region.
+  var local = value
+  let bytes = cast[ptr UncheckedArray[byte]](addr local)
+  var acc = blackHole
+  for i in 0 ..< sizeof(T):
+    acc = acc xor (bytes[i].uint64 shl ((i and 7) * 8))
+  blackHole = acc
+
 proc initBenchmark*(benchmarkName: string, sample, warm: int): Benchmark =
   result.name = benchmarkName
   result.params = Parameters(samples: sample, warmup: warm)

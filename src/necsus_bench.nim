@@ -240,7 +240,7 @@ proc runNecsusBenchmarks() =
   )
   showDetailed(suite.benchmarks[^1])
 
-  echo readSink
+  blackBox(readSink)
 
   suite.showSummary()
   suite.saveSummary("necsus")
