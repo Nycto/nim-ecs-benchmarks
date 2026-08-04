@@ -1,4 +1,6 @@
 *.exe
 *.csv
 src/*_bench
+src/results
 bench_runner
+site/

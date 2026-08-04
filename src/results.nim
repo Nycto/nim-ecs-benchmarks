@@ -2,8 +2,12 @@
 ##
 ## Pass CSV paths to compare a specific set of files; with no arguments every
 ## `*.csv` in the current directory is used.
+##
+## Two things come out of a run: the table below on stdout, and `site/`, which
+## holds the same table as an SVG for CI to publish.
 
 import os, strutils, unicode, tables, sets, math, algorithm
+import report_svg
 
 let metrics = @[
   "create entity",
@@ -24,10 +28,26 @@ let labelWidth = 4
 let valueWidth = 10
 let winnerMark = "*"
 
-type Cell = tuple[time, mem: string, seconds, bytes: float]
+# Named for what it holds rather than where it lands, so it does not collide
+# with `report_svg.Cell`, which is a cell of a rendered table.
+type Measurement = tuple[time, mem: string, seconds, bytes: float]
 
-var comparisons = Table[string, Table[string, Cell]]()
+var comparisons = Table[string, Table[string, Measurement]]()
 var suiteOrder: seq[string] = @[]
+
+# The architecture each suite implements. This is editorial -- it is nowhere in
+# the CSVs -- so it lives here rather than being inferred. Anything not listed
+# renders without a sub-heading instead of guessing.
+let architectures = {
+  "Cruise Dense": "Archetype",
+  "Cruise Sparse": "Sparse set",
+  "Easyess": "Bitset/table",
+  "MiniECS": "Sparse set",
+  "Necsus": "Framework",
+  "Pirata": "Preallocated",
+  "Polymorph": "Generative",
+  "Vecs": "Archetype",
+}.toTable
 
 # Time and memory are stacked
 let firstColumnWidth = metricWidth + 1 + labelWidth
@@ -93,7 +113,7 @@ proc csvFiles(): seq[string] =
   result.sort()
 
 for metric in metrics:
-  comparisons[metric] = Table[string, Cell]()
+  comparisons[metric] = Table[string, Measurement]()
 
 for csvFile in csvFiles():
   let lines = readFile(csvFile).splitLines()
@@ -125,10 +145,20 @@ if suiteOrder.len == 0:
   echo "No benchmark CSVs found"
   quit(1)
 
-echo ""
-echo rule("╔", "╗", "╦", "═", suiteOrder.len)
-echo header(suiteOrder)
-echo rule("╠", "╣", "╬", "═", suiteOrder.len)
+# Collected as well as printed. `run_benchmarks.sh` sends every suite's own
+# output to this same stdout first, so by the end the combined table is buried
+# under thousands of lines of per-benchmark detail; CI needs it on its own to
+# put in the job summary.
+var report: seq[string] = @[]
+
+proc emit(line: string) =
+  echo line
+  report.add line
+
+emit ""
+emit rule("╔", "╗", "╦", "═", suiteOrder.len)
+emit header(suiteOrder)
+emit rule("╠", "╣", "╬", "═", suiteOrder.len)
 
 for index, metric in metrics:
   var timeValues = Table[string, float]()
@@ -154,11 +184,69 @@ for index, metric in metrics:
       mems.add(("-", false))
 
   if index > 0:
-    echo rule("╟", "╢", "╫", "─", suiteOrder.len)
+    emit rule("╟", "╢", "╫", "─", suiteOrder.len)
 
-  echo line(metric, "time", times)
-  echo line("", "mem", mems)
+  emit line(metric, "time", times)
+  emit line("", "mem", mems)
 
-echo rule("╚", "╝", "╩", "═", suiteOrder.len)
+emit rule("╚", "╝", "╩", "═", suiteOrder.len)
+emit ""
+emit winnerMark & " marks the best value on the line, time and memory judged separately."
+
+# ============================================================================
+# SVG report
+# ============================================================================
+#
+# The same numbers as one image. CI publishes `site/` to GitHub Pages and the
+# README embeds it by URL, which is the only way a README can show a table it
+# does not itself contain -- and it has to come from Pages rather than from the
+# repo, because raw.githubusercontent.com serves SVG as text/plain.
+
+const SiteDir = "site"
+
+createDir(SiteDir)
+
+block svgReport:
+  var columns = @[
+    Column(heading: "Metric", align: Align.left),
+    Column(heading: "", align: Align.left),
+  ]
+  for suite in suiteOrder:
+    columns.add Column(
+      heading: suite, sub: architectures.getOrDefault(suite, ""), align: Align.right
+    )
+
+  var rows: seq[Row] = @[]
+  for index, metric in metrics:
+    var timeValues = Table[string, float]()
+    var memValues = Table[string, float]()
+
+    for suite, results in comparisons[metric]:
+      timeValues[suite] = results.seconds
+      memValues[suite] = results.bytes
+
+    let timeWinners = winners(timeValues)
+    let memWinners = winners(memValues)
+
+    var timeRow =
+      Row(cells: @[Cell(text: metric), Cell(text: "time")], ruleAbove: true)
+    var memRow = Row(cells: @[Cell(text: ""), Cell(text: "mem")])
+
+    for suite in suiteOrder:
+      if suite in comparisons[metric]:
+        let results = comparisons[metric][suite]
+        timeRow.cells.add Cell(text: results.time, bold: suite in timeWinners)
+        memRow.cells.add Cell(text: results.mem, bold: suite in memWinners)
+      else:
+        timeRow.cells.add Cell(text: "-")
+        memRow.cells.add Cell(text: "-")
+
+    rows.add timeRow
+    rows.add memRow
+
+  renderTable(SiteDir / "benchmarks.svg", columns, rows)
+
+writeFile(SiteDir / "summary.txt", report.join("\n") & "\n")
+
 echo ""
-echo winnerMark & " marks the best value on the line, time and memory judged separately."
+echo "Wrote " & SiteDir & "/benchmarks.svg"

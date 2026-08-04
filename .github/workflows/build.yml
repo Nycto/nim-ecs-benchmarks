@@ -1,15 +1,84 @@
 name: Build
-on: [push]
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  # A superseded branch run is worth cancelling -- the suite takes a while and
+  # nothing depends on the older numbers. A superseded run on main is not:
+  # cancelling it mid-flight can leave the Pages deployment half done.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  build:
+  benchmark:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     # Not using checkout's `submodules` option: it runs `git submodule foreach
     # --recursive`, which fails because Cruise's .gitmodules points at
     # `externalLibs/sdl3` while its gitlink is at `externalLib/sdl3`. We only
     # need the direct submodules, so init them without recursing.
     - run: git submodule update --init
+    # Pinned rather than tracking `stable`. These numbers get published, and an
+    # unpinned compiler means they can move for reasons that have nothing to do
+    # with the libraries being compared. 2.2.10 is what `stable` resolves to as
+    # of this commit, so pinning it changes nothing except that it stays put.
     - uses: iffy/install-nim@v5
+      with:
+        version: '2.2.10'
     - run: git config --global --add safe.directory "$(pwd)"
     - run: ./run_benchmarks.sh
+
+    # The comparison table on the run's own page, so a branch push is readable
+    # without downloading anything. Every suite writes its own detail to the
+    # same stdout first, so the log runs to thousands of lines; `results.nim`
+    # sets aside just the combined table for this.
+    - name: Publish summary
+      if: always()
+      run: |
+        if [ -f site/summary.txt ]; then
+          {
+            echo '### Benchmark results'
+            echo ''
+            echo '```'
+            cat site/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo 'The run produced no summary.' >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: benchmark-results
+        path: |
+          site/
+          *.csv
+        if-no-files-found: warn
+
+    - name: Package the site for Pages
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: site
+
+  # Only main publishes. Branch pushes still get the summary and the artifact
+  # above, so their numbers are reviewable without moving what the README shows.
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: benchmark
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4
