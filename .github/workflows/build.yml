@@ -12,4 +12,4 @@ jobs:
     - run: git submodule update --init
     - uses: iffy/install-nim@v5
     - run: git config --global --add safe.directory "$(pwd)"
-    - run: nim r src/all_benchmarks.nim
+    - run: ./run_benchmarks.sh

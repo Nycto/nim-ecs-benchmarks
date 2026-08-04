@@ -63,5 +63,14 @@ Ensure you have Nim installed and the libraries located in the `libs/` folder.
     ```
 3.  **Compile and run all benchmarks**:
     ```bash
-    nim r src/all_benchmarks.nim
+    ./run_benchmarks.sh
+    ```
+    Extra arguments are handed to the compiler, so the suites can be tuned:
+    ```bash
+    ./run_benchmarks.sh -d:SAMPLE=10 -d:ENTITY_COUNT=100
+    ```
+4.  **Re-render the comparison table** from CSVs that already exist:
+    ```bash
+    nim r src/results.nim          # every *.csv in the current directory
+    nim r src/results.nim results/*.csv
     ```

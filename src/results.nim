@@ -1,4 +1,9 @@
-import osproc, os, strutils, unicode, tables, sets, math
+## Renders the comparison table from the CSVs the benchmark suites produce.
+##
+## Pass CSV paths to compare a specific set of files; with no arguments every
+## `*.csv` in the current directory is used.
+
+import os, strutils, unicode, tables, sets, math, algorithm
 
 let metrics = @[
   "create entity",
@@ -77,16 +82,24 @@ proc winners(values: Table[string, float]): HashSet[string] =
     if value == best:
       result.incl(suite)
 
+proc csvFiles(): seq[string] =
+  ## The CSVs named on the command line, or every CSV in the working directory.
+  result = commandLineParams()
+  if result.len > 0:
+    return
+
+  for csvFile in walkFiles("*.csv"):
+    result.add(csvFile)
+  result.sort()
+
 for metric in metrics:
   comparisons[metric] = Table[string, Cell]()
 
-for src in walkFiles(getCurrentDir() / "src" / "*_bench.nim"):
-  if execCmd("nim c -r -d:danger -o:bench_runner " & src) != 0:
-    echo "!!! Compilation failed for ", src
-    quit(1)
-
-for csvFile in walkFiles("*.csv"):
+for csvFile in csvFiles():
   let lines = readFile(csvFile).splitLines()
+  if lines.len == 0:
+    continue
+
   let bench = lines[0].split(',')[0]
   suiteOrder.add(bench)
 
@@ -107,6 +120,10 @@ for csvFile in walkFiles("*.csv"):
         seconds: parts[3].toNumber,
         bytes: parts[4].toNumber
       )
+
+if suiteOrder.len == 0:
+  echo "No benchmark CSVs found"
+  quit(1)
 
 echo ""
 echo rule("╔", "╗", "╦", "═", suiteOrder.len)
