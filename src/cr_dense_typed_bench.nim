@@ -46,9 +46,9 @@ proc setupWorldHetero(): ECSWorld =
 proc setupWorldNoEnt(): ECSWorld =
   var world = newECSWorld()
 
-  let posID = world.registerComponent(Position)
-  let velID = world.registerComponent(Velocity)
-  let accID = world.registerComponent(Acceleration)
+  discard world.registerComponent(Position)
+  discard world.registerComponent(Velocity)
+  discard world.registerComponent(Acceleration)
 
   return world
 
@@ -166,6 +166,8 @@ proc runDenseBenchmarks() =
               else: continue
     )
   )
+  showDetailed(suite.benchmarks[^1])
+
   # ------------------------------
   # Delete dense entity
   # ------------------------------
@@ -183,14 +185,15 @@ proc runDenseBenchmarks() =
   )
   showDetailed(suite.benchmarks[^1])
 
+  var iterationEntityCount = 0
   suite.add benchmarkWithSetup(
     "iteration",
     SAMPLE,
     WARMUP,
     (
       var w = setupWorldNoEnt()
-      var ents = w.createTEntities(ENTITY_COUNT, Position, Velocity)
-      let q2 = w.denseQueryCache(query(w, Position and Velocity))
+      discard w.createTEntities(ENTITY_COUNT, Position, Velocity)
+      discard w.denseQueryCache(query(w, Position and Velocity))
       var posc = w.get(Position)
       let velc = w.get(Velocity)
     ),
@@ -204,11 +207,13 @@ proc runDenseBenchmarks() =
         for i in r:
           x[i] += dx[i]
           y[i] += dy[i]
+          iterationEntityCount += 1
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(iterationEntityCount)
 
-  var ss = 0
+  var heteroEntityCount = 0
   suite.add benchmarkWithSetup(
     "heterogeneous iter",
     SAMPLE,
@@ -265,9 +270,11 @@ proc runDenseBenchmarks() =
         for i in r:
           x[i] += dx[i]
           y[i] += dy[i]
+          heteroEntityCount += 1
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(heteroEntityCount)
 
   var s = 0'f32
   suite.add benchmarkWithSetup(
@@ -286,6 +293,7 @@ proc runDenseBenchmarks() =
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(s)
   
   suite.add benchmarkWithSetup(
     "write",
@@ -302,6 +310,7 @@ proc runDenseBenchmarks() =
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(s)
 
   suite.add benchmarkWithSetup(
     "add component",

@@ -19,19 +19,19 @@ let
 proc setupWorld(): ECSWorld =
   var world = newECSWorld()
 
-  let posID = world.registerComponent(Position)
-  let velID = world.registerComponent(Velocity)
-  let accID = world.registerComponent(Acceleration)
-  let hpID = world.registerComponent(Heal)
+  discard world.registerComponent(Position)
+  discard world.registerComponent(Velocity)
+  discard world.registerComponent(Acceleration)
+  discard world.registerComponent(Heal)
 
   return world
 
 proc setupWorldNoEnt(): ECSWorld =
   var world = newECSWorld()
 
-  let posID = world.registerComponent(Position)
-  let velID = world.registerComponent(Velocity)
-  let accID = world.registerComponent(Acceleration)
+  discard world.registerComponent(Position)
+  discard world.registerComponent(Velocity)
+  discard world.registerComponent(Acceleration)
 
   return world
 
@@ -86,7 +86,7 @@ proc churnIterate(w: var ECSWorld) =
 proc runSparseBenchmarks() =
   var suite = initSuite("Cruise Sparse Typed")
 
-  var ss = 0
+  var heteroEntityCount = 0
   suite.add benchmarkWithSetup(
     "heterogeneous iter",
     SAMPLE,
@@ -141,11 +141,11 @@ proc runSparseBenchmarks() =
         for i in r:
           posbx[i] += velbx[i]+1
           posby[i] += velby[i]+1
-          ss += 1
+          heteroEntityCount += 1
     )
   )
   showDetailed(suite.benchmarks[^1])
-  echo ss
+  blackBox(heteroEntityCount)
   # ------------------------------
   # Create single sparse entity
   # ------------------------------
@@ -228,8 +228,10 @@ proc runSparseBenchmarks() =
               else: continue
     )
   )
+  showDetailed(suite.benchmarks[^1])
+
   # ------------------------------
-  # Delete dense entity
+  # Delete sparse entity
   # ------------------------------
   suite.add benchmarkWithSetup(
     "delete entity",
@@ -310,13 +312,14 @@ proc runSparseBenchmarks() =
 
   showDetailed(suite.benchmarks[^1])
 
+  var iterationEntityCount = 0
   suite.add benchmarkWithSetup(
     "iteration",
     SAMPLE,
     WARMUP,
     (
       var w = setupWorldNoEnt()
-      var ents = w.createTSparseEntities(ENTITY_COUNT, Position, Velocity)
+      discard w.createTSparseEntities(ENTITY_COUNT, Position, Velocity)
       var posc = w.get(Position)
       let velc = w.get(Velocity)
     ),
@@ -331,9 +334,11 @@ proc runSparseBenchmarks() =
         for i in r:
           posbx[i] += velbx[i]+1
           posby[i] += velby[i]+1
+          iterationEntityCount += 1
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(iterationEntityCount)
 
   var s = 0'f32
   suite.add benchmarkWithSetup(
@@ -352,6 +357,7 @@ proc runSparseBenchmarks() =
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(s)
   
   suite.add benchmarkWithSetup(
     "write",
@@ -368,6 +374,7 @@ proc runSparseBenchmarks() =
     )
   )
   showDetailed(suite.benchmarks[^1])
+  blackBox(s)
 
   # ==============================
   # Results
