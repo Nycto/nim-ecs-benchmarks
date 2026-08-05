@@ -112,8 +112,3 @@ proc saveTimePlot*(report: Report, path: string) =
   report.savePlot(path, "median time (µs)", proc (m: Measurement): (float, float) =
     (m.seconds * micros, m.timeRatio)
   )
-
-proc saveMemoryPlot*(report: Report, path: string) =
-  report.savePlot(path, "median memory (MiB)", proc (m: Measurement): (float, float) =
-    (m.bytes / mebibytes, m.memRatio)
-  )
