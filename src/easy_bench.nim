@@ -1,8 +1,6 @@
 import times, math, tables, random
 import ../libs/easyess/src/easyess
 
-from common import  SAMPLE, WARMUP, ENTITY_COUNT, SELECTION_THRESHOLD
-
 # =========================
 # Benchmark template
 # =========================
@@ -63,7 +61,7 @@ sys [Position, Velocity], "movement":
 # World setup
 # =========================
 
-createECS(ECSConfig(maxEntities: 20000))
+createECS(ECSConfig(maxEntities: CAPACITY))
 
 # =========================
 # Benchmarks
@@ -289,4 +287,9 @@ proc runEasyBenchmarks() =
   suite.saveSummary("easy")
 
 if isMainModule:
-  runEasyBenchmarks()
+  const maxSupportedEntities = int(high(Entity)) + 1
+  if CAPACITY > maxSupportedEntities:
+    echo "ERROR: CAPACITY (" & $CAPACITY & ") exceeds the maximum supported number of entities (" & $maxSupportedEntities & ") for this build of easyess."
+    echo "Reduce ENTITY_COUNT or adjust the ECS library configuration."
+  else:
+    runEasyBenchmarks()

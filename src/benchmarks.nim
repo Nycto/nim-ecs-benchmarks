@@ -4,6 +4,13 @@
 
 import times, math, algorithm, strutils, tables, unicode, std/monotimes
 
+const
+  SAMPLE* {.intDefine.} = 1000
+  WARMUP* {.intDefine.} = 1
+  ENTITY_COUNT* {.intDefine.} = 10_000
+  SELECTION_THRESHOLD* = 0.1
+  CAPACITY* = ENTITY_COUNT * 3
+
 type
   Parameters* = object
     samples*: int
@@ -306,16 +313,16 @@ proc showSummary*(suite: BenchmarkSuite) =
   echo "╚═", "═".repeat(60), "═╝"
 
 proc saveSummary*(suite: BenchmarkSuite, name: string) =
-  var file = open(name & ".csv", fmWrite)
+  var file = open(name & "_" & $ENTITY_COUNT & ".csv", fmWrite)
   defer: file.close()
 
-  file.writeLine(suite.name & ",time_median,mem_median,time_seconds,mem_bytes")
+  file.writeLine(suite.name & ",entity_count,time_median,mem_median,time_seconds,mem_bytes")
 
   for bench in suite.benchmarks:
     let mem = prettyMem(bench.memStats.median)
     let time = prettyTime(bench.timeStats.median)
     file.writeLine(
-      bench.name & "," & time & "," & mem & "," &
+      bench.name & "," & $ENTITY_COUNT & "," & time & "," & mem & "," &
       bench.timeStats.median.formatFloat(ffScientific, 10) & "," &
       bench.memStats.median.formatFloat(ffScientific, 10)
     )

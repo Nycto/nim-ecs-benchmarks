@@ -7,13 +7,12 @@ import benchmarks
 
 const
   ChurnSeed = 90210
-  ChurnEntityCount* = 1_000_000
-  ChurnCapacity* = ChurnEntityCount * 2
+  ChurnCapacity* = ENTITY_COUNT * 2
     ## Headroom for libraries that want a fixed capacity up front. The churn
     ## recycles slots rather than growing, so the extra is never occupied.
   ChurnRoundCount = 10
   ChurnDivisor = 5 ## A fifth of the world is replaced per round.
-  ChurnPerRound = ChurnEntityCount div ChurnDivisor
+  ChurnPerRound = ENTITY_COUNT div ChurnDivisor
   ChurnSamples = 20
   ChurnWarmup = 1
 
@@ -21,8 +20,8 @@ proc buildChurnSchedule(): seq[seq[int]] =
   ## Per round, the positions in the live-entity array to replace. Distinct
   ## within a round, and seeded, so every library churns identically.
   var rng = initRand(ChurnSeed)
-  var pool = newSeq[int](ChurnEntityCount)
-  for i in 0 ..< ChurnEntityCount:
+  var pool = newSeq[int](ENTITY_COUNT)
+  for i in 0 ..< ENTITY_COUNT:
     pool[i] = i
 
   result = newSeq[seq[int]](ChurnRoundCount)
@@ -33,12 +32,12 @@ proc buildChurnSchedule(): seq[seq[int]] =
 let churnSchedule* = buildChurnSchedule()
 
 proc populateChurn*[W](world: var W; churned: bool) =
-  ## Fills a freshly registered world with `ChurnEntityCount` entities, and when
+  ## Fills a freshly registered world with `ENTITY_COUNT` entities, and when
   ## `churned` is set, replaces a fifth of them `ChurnRoundCount` times over.
   mixin churnSpawn, churnDestroy
 
-  var handles = newSeq[typeof(world.churnSpawn())](ChurnEntityCount)
-  for i in 0 ..< ChurnEntityCount:
+  var handles = newSeq[typeof(world.churnSpawn())](ENTITY_COUNT)
+  for i in 0 ..< ENTITY_COUNT:
     handles[i] = world.churnSpawn()
 
   if churned:

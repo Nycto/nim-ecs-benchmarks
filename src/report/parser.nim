@@ -1,4 +1,4 @@
-import std/[strutils, tables]
+import std/[strutils, tables, sets]
 
 const architectures = {
   "Cruise Dense": "Archetype",
@@ -26,20 +26,23 @@ const metricOrder* = [
 ]
 
 type
+  MetricKey* = tuple[metric: string, entityCount: int]
+
   Measurement* = object
-    time*: string   ## Median time, formatted for display
-    mem*: string    ## Median memory, formatted for display
-    seconds*: float ## Median time, for comparing against other suites
-    bytes*: float   ## Median memory, for comparing against other suites
+    entityCount*: int ## The number of entities in the benchmark
+    time*: string     ## Median time, formatted for display
+    mem*: string      ## Median memory, formatted for display
+    seconds*: float   ## Median time, for comparing against other suites
+    bytes*: float     ## Median memory, for comparing against other suites
     timeWinner*: bool ## Whether this is the fastest time on its row
     memWinner*: bool  ## Whether this is the smallest memory on its row
     timeRatio*: float ## How many times slower this is than the fastest time on its row
     memRatio*: float  ## How many times larger this is than the smallest memory on its row
 
-  Suite* = object
+  Suite* = ref object
     name*: string
     architecture*: string ## How the library is built, where it is known
-    measurements*: Table[string, Measurement]
+    measurements*: Table[MetricKey, Measurement]
 
   Report* = object
     suites*: seq[Suite]
@@ -53,24 +56,26 @@ proc toNumber(value: string): float =
 proc parseSuite*(csv: string): Suite =
   let lines = csv.splitLines()
 
-  result.name = lines[0].split(',')[0].strip()
+  result = Suite(name: lines[0].split(',')[0].strip())
   result.architecture = architectures.getOrDefault(result.name, "")
 
   for line in lines[1..^1]:
     let parts = line.split(',')
-    if parts.len < 5:
+    if parts.len < 6:
       continue
 
     let metric = parts[0].strip()
     if metric notin metricOrder:
       continue
 
-    let bytes = parts[4].toNumber
+    let entityCount = parts[1].strip().parseInt()
+    let bytes = parts[5].toNumber
 
-    result.measurements[metric] = Measurement(
-      time: parts[1].strip(),
-      mem: if bytes > 0: parts[2].strip() else: "-",
-      seconds: parts[3].toNumber,
+    result.measurements[(metric, entityCount)] = Measurement(
+      entityCount: entityCount,
+      time: parts[2].strip(),
+      mem: if bytes > 0: parts[3].strip() else: "-",
+      seconds: parts[4].toNumber,
       bytes: bytes
     )
 
@@ -87,33 +92,51 @@ proc ratio(value, best: float): float =
   else:
     0.0
 
+iterator entityCounts*(report: Report): int =
+  var seen = initHashSet[int]()
+  for suite in report.suites:
+    for key in suite.measurements.keys:
+      if key.entityCount notin seen:
+        seen.incl(key.entityCount)
+        yield key.entityCount
+
 proc markWinners(report: var Report) =
-  for metric in metricOrder:
-    var seconds, bytes: seq[float]
+  for entityCount in entityCounts(report):
+    for metric in metricOrder:
+      var seconds, bytes: seq[float]
 
-    for suite in report.suites:
-      if metric in suite.measurements:
-        seconds.add(suite.measurements[metric].seconds)
-        bytes.add(suite.measurements[metric].bytes)
+      let metricKey = (metric, entityCount)
 
-    let bestTime = best(seconds)
-    let bestMem = best(bytes)
+      for suite in report.suites:
+        if suite.measurements.hasKey(metricKey):
+          seconds.add(suite.measurements[metricKey].seconds)
+          bytes.add(suite.measurements[metricKey].bytes)
 
-    for suite in report.suites.mitems:
-      if metric in suite.measurements:
-        template measured: Measurement = suite.measurements[metric]
-        measured.timeRatio = ratio(measured.seconds, bestTime)
-        measured.memRatio = ratio(measured.bytes, bestMem)
+      let bestTime = best(seconds)
+      let bestMem = best(bytes)
 
-        if seconds.len >= 2:
-          measured.timeWinner = bestTime < Inf and measured.seconds == bestTime
-          measured.memWinner = bestMem < Inf and measured.bytes == bestMem
+      for suite in report.suites.mitems:
+        if suite.measurements.hasKey(metricKey):
+          template measured: Measurement = suite.measurements[metricKey]
+          measured.timeRatio = ratio(measured.seconds, bestTime)
+          measured.memRatio = ratio(measured.bytes, bestMem)
+
+          if seconds.len >= 2:
+            measured.timeWinner = bestTime < Inf and measured.seconds == bestTime
+            measured.memWinner = bestMem < Inf and measured.bytes == bestMem
 
 proc parseFiles*(paths: openArray[string]): Report =
+  var suites = initTable[string, Suite]()
   for path in paths:
     let suite = parseSuite(readFile(path))
-    if suite.name.len > 0:
+    assert(suite.name.len > 0)
+
+    if suite.name notin suites:
       result.suites.add(suite)
+      suites[suite.name] = suite
+    else:
+      for key, measures in suite.measurements:
+        suites[suite.name].measurements[key] = measures
 
   result.markWinners()
 

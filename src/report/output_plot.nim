@@ -1,4 +1,4 @@
-import std/[tables, algorithm, math, sequtils, strutils], ggplotnim, ginger/backends, parser
+import std/[tables, algorithm, math, sequtils, strutils, strformat], ggplotnim, ginger/backends, parser
 import ginger except Scale
 
 type ExtractCallback = proc (m: Measurement): tuple[value, ratio: float]
@@ -28,17 +28,18 @@ proc colors(report: Report): Table[string, Color] =
     result[name] = parseHtmlHex(palette[index mod palette.len])
   result[clippedKey] = parseHtmlHex(clippedFill)
 
-proc panel(report: Report, metric, label: string, extract: ExtractCallback): GgPlot =
+proc panel(report: Report, metric, label: string, entityCount: int, extract: ExtractCallback): GgPlot =
   ## One metric's bars
   var suites, labels, fills: seq[string]
   var values: seq[float]
   var cap = 0.0
 
+  let key = (metric, entityCount)
   for suite in report.suites:
-    if metric notin suite.measurements:
+    if key notin suite.measurements:
       continue
 
-    let (measured, ratio) = extract(suite.measurements[metric])
+    let (measured, ratio) = extract(suite.measurements[key])
     if measured == Inf:
       continue
 
@@ -68,7 +69,7 @@ proc panel(report: Report, metric, label: string, extract: ExtractCallback): GgP
   result = ggplot(df, aes(x = "suite", y = "value", fill = "fill")) +
     geom_bar(stat = "identity", position = "identity") +
     scale_fill_manual(report.colors) +
-    ggtitle(metric & " (lower is better)") +
+    ggtitle(fmt"{metric} at {entityCount} entities (lower is better)") +
     xlab(" ", rotate = -30.0, alignTo = "right") +
     ylab(label) +
     backgroundColor(white) +
@@ -83,7 +84,7 @@ proc panel(report: Report, metric, label: string, extract: ExtractCallback): GgP
       ) +
       ylim(0.0, cap * clipHeadroom, outsideRange = "clip")
 
-proc savePlot(report: Report, path, label: string, extract: ExtractCallback) =
+proc savePlot(report: Report, path, label: string, entityCount: int, extract: ExtractCallback) =
   let rows = (metricOrder.len + columns - 1) div columns
 
   let texOptions = toTeXOptions(false, false, false, "", "", "", "htbp")
@@ -99,7 +100,7 @@ proc savePlot(report: Report, path, label: string, extract: ExtractCallback) =
   image.layout(cols = columns, rows = rows)
 
   for index, metric in metricOrder:
-    var plot = report.panel(metric, label, extract)
+    var plot = report.panel(metric, label, entityCount, extract)
     plot.backend = backend
     plot.fType = fType
 
@@ -109,6 +110,7 @@ proc savePlot(report: Report, path, label: string, extract: ExtractCallback) =
   image.draw(path, texOptions)
 
 proc saveTimePlot*(report: Report, path: string) =
-  report.savePlot(path, "median time (µs)", proc (m: Measurement): (float, float) =
-    (m.seconds * micros, m.timeRatio)
-  )
+  for entityCount in report.entityCounts:
+    report.savePlot(path % $entityCount, "median time (µs)", entityCount, proc (m: Measurement): (float, float) =
+      (m.seconds * micros, m.timeRatio)
+    )

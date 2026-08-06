@@ -98,8 +98,8 @@ var churnThisApp = false
 proc spawnChurnWorld(
   spawn: FullSpawn[(Position, Velocity)], delete: Delete
 ) {.startupSys.} =
-  var handles = newSeq[EntityId](ChurnEntityCount)
-  for i in 0 ..< ChurnEntityCount:
+  var handles = newSeq[EntityId](ENTITY_COUNT)
+  for i in 0 ..< ENTITY_COUNT:
     handles[i] = spawn.with(Position(x: 1.0, y: 1.0), Velocity(x: 1.0, y: 1.0))
 
   if churnThisApp:
@@ -157,19 +157,19 @@ proc addRemoveComponent(
 # Apps
 # =========================
 
-proc appCreate() {.necsus([~createEntities], newNecsusConf(entitySize = 100_000)).}
-proc appIter() {.necsus([~spawnPosVel, ~move], newNecsusConf(entitySize = 100_000)).}
-proc appDelete() {.necsus([~spawnPosVel, ~deleteEntities], newNecsusConf(entitySize = 100_000)).}
-proc appRead() {.necsus([~spawnTrackedPos, ~readSystem], newNecsusConf(entitySize = 100_000)).}
-proc appWrite() {.necsus([~spawnTrackedPos, ~writeSystem], newNecsusConf(entitySize = 100_000)).}
-proc appAddComp() {.necsus([~spawnPosVel, ~addComponent], newNecsusConf(entitySize = 100_000)).}
-proc appRemoveComp() {.necsus([~spawnPosVelAccel, ~removeComponent], newNecsusConf(entitySize = 100_000)).}
-proc appAddRemoveComp() {.necsus([~spawnPosVel, ~addRemoveComponent], newNecsusConf(entitySize = 100_000)).}
-proc appHetero() {.necsus([~spawnHetero, ~move], newNecsusConf(entitySize = 100_000)).}
+proc appCreate() {.necsus([~createEntities], newNecsusConf(entitySize = CAPACITY)).}
+proc appIter() {.necsus([~spawnPosVel, ~move], newNecsusConf(entitySize = CAPACITY)).}
+proc appDelete() {.necsus([~spawnPosVel, ~deleteEntities], newNecsusConf(entitySize = CAPACITY)).}
+proc appRead() {.necsus([~spawnTrackedPos, ~readSystem], newNecsusConf(entitySize = CAPACITY)).}
+proc appWrite() {.necsus([~spawnTrackedPos, ~writeSystem], newNecsusConf(entitySize = CAPACITY)).}
+proc appAddComp() {.necsus([~spawnPosVel, ~addComponent], newNecsusConf(entitySize = CAPACITY)).}
+proc appRemoveComp() {.necsus([~spawnPosVelAccel, ~removeComponent], newNecsusConf(entitySize = CAPACITY)).}
+proc appAddRemoveComp() {.necsus([~spawnPosVel, ~addRemoveComponent], newNecsusConf(entitySize = CAPACITY)).}
+proc appHetero() {.necsus([~spawnHetero, ~move], newNecsusConf(entitySize = CAPACITY)).}
 
 proc appChurn() {.necsus(
   [~spawnChurnWorld, ~move],
-  newNecsusConf(ChurnCapacity, ChurnEntityCount, eagerAlloc = true)
+  newNecsusConf(ChurnCapacity, ENTITY_COUNT, eagerAlloc = true)
 ).}
 
 proc newChurnWorld(churned: bool): auto =

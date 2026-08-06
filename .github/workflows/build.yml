@@ -19,7 +19,9 @@ jobs:
     - run: sudo apt-get update
     - run: sudo apt-get install -y clang libcairo2 liblapack3 liblapack-dev libopenblas-dev
     - run: nimble install --depsOnly
-    - run: ./run_benchmarks.sh
+    - run: ./run_benchmarks.sh -d:ENTITY_COUNT=10000 -d:SAMPLE=1000
+    - run: ./run_benchmarks.sh -d:ENTITY_COUNT=100000 -d:SAMPLE=1000
+    - run: ./run_benchmarks.sh -d:ENTITY_COUNT=1000000 -d:SAMPLE=100
 
     - name: Publish summary
       run: |
