@@ -1,4 +1,4 @@
-import std/[strutils, tables, sets]
+import std/[strutils, tables, sets, algorithm]
 
 const architectures = {
   "Cruise Dense": "Archetype",
@@ -44,7 +44,8 @@ type
     architecture*: string ## How the library is built, where it is known
     measurements*: Table[MetricKey, Measurement]
 
-  Report* = object
+  Report* = ref object
+    entityCountCache: seq[int]
     suites*: seq[Suite]
 
 proc toNumber(value: string): float =
@@ -93,14 +94,18 @@ proc ratio(value, best: float): float =
     0.0
 
 iterator entityCounts*(report: Report): int =
-  var seen = initHashSet[int]()
-  for suite in report.suites:
-    for key in suite.measurements.keys:
-      if key.entityCount notin seen:
-        seen.incl(key.entityCount)
-        yield key.entityCount
+  if report.entityCountCache.len == 0:
+    var seen = initHashSet[int]()
+    for suite in report.suites:
+      for key in suite.measurements.keys:
+        if key.entityCount notin seen:
+          seen.incl(key.entityCount)
+          report.entityCountCache.add(key.entityCount)
+    report.entityCountCache.sort()
+  for count in report.entityCountCache:
+    yield count
 
-proc markWinners(report: var Report) =
+proc markWinners(report: Report) =
   for entityCount in entityCounts(report):
     for metric in metricOrder:
       var seconds, bytes: seq[float]
@@ -126,6 +131,8 @@ proc markWinners(report: var Report) =
             measured.memWinner = bestMem < Inf and measured.bytes == bestMem
 
 proc parseFiles*(paths: openArray[string]): Report =
+  result = Report()
+
   var suites = initTable[string, Suite]()
   for path in paths:
     let suite = parseSuite(readFile(path))
