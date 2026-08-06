@@ -13,7 +13,7 @@ type
 proc asTableCells*(report: Report): seq[seq[TableCell]] =
   ## Two header lines, then a time line and a memory line per metric. Cells the
   ## table has nothing to say in are empty.
-  var names = @[TableCell(text: "Metric", bold: true), TableCell(text: "Entity Count", bold: true), TableCell()]
+  var names = @[TableCell(text: "Metric", bold: true), TableCell(text: "Entity Count", bold: true)]
 
   var architectures = @[TableCell(small: true), TableCell(small: true)]
 
@@ -27,11 +27,12 @@ proc asTableCells*(report: Report): seq[seq[TableCell]] =
   result.add architectures
 
   for metric in report.metrics:
+    var isFirst = true
     for entityCount in report.entityCounts:
       let key = (metric, entityCount)
 
-      var times = @[TableCell(text: metric), TableCell(text: $entityCount), TableCell(text: "time")]
-      var mems = @[TableCell(), TableCell(), TableCell(text: "mem")]
+      var times = @[TableCell(text: if isFirst: metric else: ""), TableCell(text: $entityCount)]
+      isFirst = false
 
       for suite in report.suites:
         if key in suite.measurements:
@@ -39,15 +40,10 @@ proc asTableCells*(report: Report): seq[seq[TableCell]] =
           times.add TableCell(
             text: measured.time, bold: measured.timeWinner, alignRight: true
           )
-          mems.add TableCell(
-            text: measured.mem, bold: measured.memWinner, alignRight: true
-          )
         else:
           times.add TableCell(text: Placeholder, muted: true, alignRight: true)
-          mems.add TableCell(text: Placeholder, muted: true, alignRight: true)
 
       result.add times
-      result.add mems
 
 proc columnWidths*(rows: seq[seq[TableCell]], width: CellSize): seq[int] =
   ## The widest cell in a column is what the whole column has to accommodate.

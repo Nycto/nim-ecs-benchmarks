@@ -84,8 +84,16 @@ proc renderSvg*(report: Report): string =
     }.toXmlAttributes)
   ]
 
+  var previousTitle = ""
   for index, row in rows:
     let y = rowY[index]
+
+    let title = row[0].text
+    if previousTitle == "":
+      previousTitle = title
+    elif title != previousTitle and title != "":
+      previousTitle = title
+      nodes.add divider(y, total)
 
     for column, cell in row:
       if cell.text.len == 0:
@@ -96,9 +104,6 @@ proc renderSvg*(report: Report): string =
         else: columnX[column] + CellPad
 
       nodes.add cell.render(x, y + heights[index] - Descent)
-
-    if index mod 2 == 1:
-      nodes.add divider(y + heights[index], total)
 
   let svg = newXmlTree("svg", nodes, {
     "xmlns": "http://www.w3.org/2000/svg",
