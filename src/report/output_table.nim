@@ -1,73 +1,44 @@
 ## Renders a report as a box-drawn table, one column per suite.
 
-import std/[strutils, unicode, tables]
-import parser
+import std/[strutils, unicode, tables, sequtils]
+import parser, data_table
 
-const
-  metricWidth = 20
-  labelWidth = 4
-  valueWidth = 10
-  winnerMark = "*"
+proc getText(cell: TableCell, width: int, fill: string): string =
+  return if cell == nil:
+    fill.repeat(width)
+  elif cell.alignRight:
+    unicode.align(cell.text, width, fill.runeAt(0))
+  else:
+    unicode.alignLeft(cell.text, width, fill.runeAt(0))
 
-# Time and memory are stacked under a single metric name
-const firstColumnWidth = metricWidth + 1 + labelWidth
+proc line(left, right, join, fill: string, columnWidths: seq[int], values: seq[TableCell] = @[]): string =
+  result = left
+  var isFirst = true
+  for i, columnWidth in columnWidths:
+    if isFirst:
+      isFirst = false
+    else:
+      result &= join
 
-# Each value is rendered as " <value> <mark> ", where the mark is the winner
-const columnWidth = valueWidth + 4
+    let rowText = getText(if values.len > i: values[i] else: nil, columnWidth, fill)
+    result &= fill & rowText & fill
+  result &= right & "\n"
 
-type Value = tuple[value: string, won: bool]
-
-proc rule(left: string, right: string, join: string, fill: string, columnCount: int): string =
-  result = left & fill.repeat(firstColumnWidth + 2) & join
-  for i in 0 ..< columnCount:
-    result &= fill.repeat(columnWidth) & (if i == columnCount - 1: right else: join)
-
-proc header(infos: seq[string]): string =
-  result = "║ " & " ".repeat(firstColumnWidth) & " ║"
-
-  for info in infos:
-    let name = if info.runeLen > columnWidth: info.runeSubStr(0, columnWidth) else: info
-    result &= name.center(columnWidth) & "║"
-
-proc line(name, label: string, values: seq[Value]): string =
-  result = "║ " & name.alignLeft(metricWidth) & " " & label.alignLeft(labelWidth) & " ║"
-
-  for (value, won) in values:
-    let mark = if won: winnerMark else: " "
-    result &= " " & unicode.align(value, valueWidth) & " " & mark & " ║"
+proc width(cell: TableCell): int = cell.text.len
 
 proc renderTable*(report: Report): string =
-  let names = report.suiteNames
+  let rows = report.asTableCells()
 
-  var lines = @[
-    rule("╔", "╗", "╦", "═", names.len),
-    header(names),
-    rule("╠", "╣", "╬", "═", names.len)
-  ]
+  let widths = rows.columnWidths(width)
+  result = line("╔", "╗", "╦", "═", widths)
 
-  var first = true
+  var previousLeftColumn = ""
+  for row in rows:
+    if row[0].text != previousLeftColumn and row[0].text != "":
+      if previousLeftColumn != "":
+        result &= line("╟", "╢", "╫", "─", widths)
+      previousLeftColumn = row[0].text
 
-  for metric in report.metrics:
-    var times, mems: seq[Value]
+    result &= line("║", "║", "║", " ", widths, row)
 
-    for suite in report.suites:
-      if metric in suite.measurements:
-        let measured = suite.measurements[metric]
-        times.add((measured.time, measured.timeWinner))
-        mems.add((measured.mem, measured.memWinner))
-      else:
-        times.add(("-", false))
-        mems.add(("-", false))
-
-    if not first:
-      lines.add(rule("╟", "╢", "╫", "─", names.len))
-    first = false
-
-    lines.add(line(metric, "time", times))
-    lines.add(line("", "mem", mems))
-
-  lines.add(rule("╚", "╝", "╩", "═", names.len))
-  lines.add("")
-  lines.add(winnerMark & " marks the best value on the line, time and memory judged separately.")
-
-  return lines.join("\n")
+  result &= line("╚", "╝", "╩", "═", widths)
