@@ -1,5 +1,4 @@
-import std/[math, unicode, tables, xmltree]
-import parser
+import std/[math, tables], parser
 
 const Placeholder = "-"
 
