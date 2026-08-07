@@ -1,6 +1,6 @@
 ## Renders a report as a standalone SVG, one column per suite.
 
-import std/[math, unicode, tables, xmltree]
+import std/[math, unicode, xmltree]
 import parser, data_table
 
 const

@@ -1,6 +1,6 @@
 ## Renders a report as a box-drawn table, one column per suite.
 
-import std/[strutils, unicode, tables, sequtils]
+import std/[strutils, unicode]
 import parser, data_table
 
 proc getText(cell: TableCell, width: int, fill: string): string =
