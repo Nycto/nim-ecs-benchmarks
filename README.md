@@ -20,9 +20,9 @@ between two rows of the same library, are the parts worth reading.
 
 ## Results
 
-[![Median time and memory for every benchmark across all eight ECS libraries](https://Gesee-y.github.io/nim-ecs-benchmarks/benchmarks.svg)](https://Gesee-y.github.io/nim-ecs-benchmarks/benchmarks.svg)
+[![Median time and memory for every benchmark across all eight ECS libraries](https://nycto.github.io/nim-ecs-benchmarks/benchmarks.svg)](https://nycto.github.io/nim-ecs-benchmarks/benchmarks.svg)
 
-[![Median time for every benchmark, one panel per metric](https://Gesee-y.github.io/nim-ecs-benchmarks/time.svg)](https://Gesee-y.github.io/nim-ecs-benchmarks/time.svg)
+[![Median time for every benchmark, one panel per metric](https://nycto.github.io/nim-ecs-benchmarks/time.svg)](https://nycto.github.io/nim-ecs-benchmarks/time.svg)
 
 ---
 

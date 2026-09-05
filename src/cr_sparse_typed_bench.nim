@@ -17,7 +17,7 @@ let
 # ==============================
 
 proc setupWorld(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
 
   discard world.registerComponent(Position)
   discard world.registerComponent(Velocity)
@@ -27,7 +27,7 @@ proc setupWorld(): ECSWorld =
   return world
 
 proc setupWorldNoEnt(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
 
   discard world.registerComponent(Position)
   discard world.registerComponent(Velocity)

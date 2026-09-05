@@ -26,7 +26,7 @@ proc setComponent[T](blk: ptr T, i:uint, v:Position) =
 # =========================
 
 proc setupWorldHetero(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
   discard world.registerComponent(Position)
   discard world.registerComponent(Velocity)
   discard world.registerComponent(Acceleration)
@@ -44,7 +44,7 @@ proc setupWorldHetero(): ECSWorld =
 # =========================
 
 proc setupWorldNoEnt(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
 
   let posID = world.registerComponent(Position)
   let velID = world.registerComponent(Velocity)

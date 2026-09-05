@@ -17,7 +17,7 @@ let
 # ==============================
 
 proc setupWorld(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
 
   let posID = world.registerComponent(Position)
   let velID = world.registerComponent(Velocity)
@@ -27,7 +27,7 @@ proc setupWorld(): ECSWorld =
   return world
 
 proc setupWorldHetero(): ECSWorld =
-  var world = newECSWorld()
+  var world = newECSWorld(max_entities=ENTITY_COUNT)
   discard world.registerComponent(Position)
   discard world.registerComponent(Velocity)
   discard world.registerComponent(Acceleration)
