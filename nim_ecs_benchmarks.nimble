@@ -11,3 +11,4 @@ bin           = @["report"]
 
 requires "nim >= 2.2.10"
 requires "ggplotnim >= 0.7.6"
+requires "cborious" # Required by libs/vecs
